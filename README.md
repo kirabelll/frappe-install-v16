@@ -1,10 +1,12 @@
-# Frappe Framework v16 Installation Script for Ubuntu 24.04 LTS
+# Frappe Framework v16 & ERPNext v16 Beta Installation Script for Ubuntu 24.04 LTS
 
-This repository contains an automated installation script for Frappe Framework version 16 on Ubuntu 24.04 LTS.
+This repository contains an automated installation script for Frappe Framework version 16 and ERPNext v16 Beta on Ubuntu 24.04 LTS.
 
-## What is Frappe Framework?
+## What is Frappe Framework & ERPNext?
 
-Frappe Framework is a full-stack web application framework that uses Python and MariaDB on the server side with a tightly integrated client-side library. It's the foundation for ERPNext and other business applications.
+**Frappe Framework** is a full-stack web application framework that uses Python and MariaDB on the server side with a tightly integrated client-side library.
+
+**ERPNext** is a comprehensive ERP system built on Frappe Framework, offering modules for accounting, inventory, CRM, manufacturing, and more.
 
 ## Prerequisites
 
@@ -12,6 +14,8 @@ Frappe Framework is a full-stack web application framework that uses Python and 
 - User account with sudo privileges
 - Internet connection
 - At least 4GB RAM and 20GB disk space
+- Root access to MySQL during installation
+
 ## Quick Installation
 
 1. Clone or download this repository
@@ -35,36 +39,54 @@ Frappe Framework is a full-stack web application framework that uses Python and 
 - Git, curl, wget
 - Build tools and libraries
 - wkhtmltopdf for PDF generation
+- fail2ban for security
+- Supervisor for process management
 
 ### Frappe Components
 - Frappe Framework version 16
+- ERPNext version 16 Beta
 - Bench (Frappe's CLI tool)
 - A new site at `frappe.localhost`
+- Production-ready configuration
 
 ## Post-Installation
 
 After successful installation:
 
 1. **Access your site:**
-   - URL: `http://frappe.localhost:8000`
+   - URL: `http://frappe.localhost`
    - Username: `Administrator`
    - Password: `admin`
 
-2. **Start development server:**
+2. **For development mode:**
    ```bash
    sudo -u frappe bash
    cd /home/frappe/frappe-bench
    bench start
    ```
+   Then access: `http://frappe.localhost:8000`
 
 3. **Check installation details:**
    ```bash
    cat /home/frappe/frappe_passwords.txt
    ```
 
+## Installation Steps Overview
+
+The script follows these major steps:
+
+1. **Initial Setup** - System updates and user verification
+2. **Install Prerequisites** - Python, Node.js, system libraries
+3. **Configure MariaDB** - Database server setup and security
+4. **Install Additional Dependencies** - Redis, Nginx, build tools
+5. **Install Frappe Bench** - Framework management tool
+6. **Create New Site** - Site creation with ERPNext installation
+7. **Production Setup** - Nginx, Supervisor configuration
+8. **Security Configuration** - fail2ban setup
+
 ## Important Security Notes
 
-⚠️ **Change default passwords immediately in production!**
+⚠️ **Change default passwords immediately!**
 
 - MariaDB root password: `frappe_root_password`
 - Frappe Administrator password: `admin`
@@ -88,52 +110,114 @@ bench new-app myapp
 # Install app to site
 bench --site frappe.localhost install-app myapp
 
-# Update bench
+# Update bench and apps
 bench update
+
+# Database migration
+bench migrate
 ```
 
-### Production Setup (Optional)
+### Production Management
 ```bash
-# Setup production configuration
-sudo bench setup production frappe
+# Restart all services
+sudo supervisorctl restart all
 
-# Start services
-sudo systemctl start frappe
-sudo systemctl enable frappe
+# Check service status
+sudo systemctl status nginx
+sudo systemctl status mariadb
+sudo systemctl status redis-server
+
+# Restart individual services
+sudo systemctl restart nginx
+sudo systemctl restart mariadb
 ```
 
-## Troubleshooting
+## Troubleshooting Guide
 
-### Common Issues
+### 1. Internal Server Error
 
-1. **Permission errors:**
-   ```bash
-   sudo chown -R frappe:frappe /home/frappe/frappe-bench
-   ```
+**Possible Causes:**
+- MySQL database issues
+- Code errors in hooks.py
 
-2. **MariaDB connection issues:**
-   ```bash
-   sudo systemctl restart mariadb
-   sudo mysql -u root -p
-   ```
+**Solutions:**
+```bash
+# Database migration
+bench migrate
 
-3. **Node.js version conflicts:**
-   ```bash
-   node --version  # Should be v18.x
-   npm --version
-   ```
+# Check MySQL status
+sudo systemctl status mariadb
 
-### Log Files
+# Restart MySQL if needed
+sudo systemctl restart mariadb
+```
+
+### 2. "Sorry! We will be back soon" Error
+
+**Possible Cause:**
+- Supervisor service issues
+
+**Solution:**
+```bash
+# Restart supervisor
+bench restart
+# OR
+sudo supervisorctl restart all
+```
+
+### 3. "This site can't be reached" Error
+
+**Possible Causes:**
+- fail2ban service blocking connections
+- Nginx not running or misconfigured
+
+**Solutions:**
+```bash
+# Stop fail2ban temporarily
+sudo systemctl stop fail2ban
+
+# Check and restart Nginx
+sudo systemctl status nginx
+sudo systemctl restart nginx
+
+# Check Nginx configuration
+sudo nginx -t
+```
+
+### 4. Permission Issues
+```bash
+# Fix ownership
+sudo chown -R frappe:frappe /home/frappe/frappe-bench
+
+# Fix permissions
+sudo chmod -R 755 /home/frappe/frappe-bench
+```
+
+### 5. Node.js Version Issues
+```bash
+# Check Node.js version (should be v18.x)
+node --version
+npm --version
+
+# If wrong version, reinstall Node.js 18
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+## Log Files
+
 - Bench logs: `/home/frappe/frappe-bench/logs/`
 - MariaDB logs: `/var/log/mysql/`
 - Nginx logs: `/var/log/nginx/`
+- Supervisor logs: `/var/log/supervisor/`
 
 ## File Structure
 
 ```
 /home/frappe/frappe-bench/
 ├── apps/
-│   └── frappe/          # Frappe Framework
+│   ├── frappe/          # Frappe Framework
+│   └── erpnext/         # ERPNext application
 ├── sites/
 │   └── frappe.localhost/  # Your site
 ├── config/
@@ -141,10 +225,27 @@ sudo systemctl enable frappe
 └── env/                 # Python virtual environment
 ```
 
+## Service Management
+
+### Systemd Services
+- `frappe.service` - Main Frappe application
+- `nginx.service` - Web server
+- `mariadb.service` - Database server
+- `redis-server.service` - Cache server
+- `fail2ban.service` - Security service
+
+### Supervisor Processes
+- Web workers
+- Background workers
+- Scheduler
+- Socket.io server
+
 ## Additional Resources
 
 - [Official Frappe Documentation](https://docs.frappe.io/framework)
+- [ERPNext Documentation](https://docs.erpnext.com/)
 - [Frappe GitHub Repository](https://github.com/frappe/frappe)
+- [ERPNext GitHub Repository](https://github.com/frappe/erpnext)
 - [Frappe Community Forum](https://discuss.frappe.io/)
 - [Frappe School](https://frappe.school/)
 
@@ -159,8 +260,8 @@ If you encounter issues:
 
 ## License
 
-This installation script is provided as-is. Frappe Framework is licensed under MIT License.
+This installation script is provided as-is. Frappe Framework and ERPNext are licensed under MIT License.
 
 ---
 
-**Note:** This script is designed specifically for Ubuntu 24.04 LTS. For other distributions or versions, please refer to the official Frappe installation documentation.
+**Note:** This script installs ERPNext v16 Beta. For production use, consider using stable releases when available.

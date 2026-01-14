@@ -76,11 +76,12 @@ sudo apt install -y \
     libpng-dev \
     zlib1g-dev \
     libmysqlclient-dev \
-    pkg-config
+    pkg-config \
+    fail2ban
 
 # Install Node.js 18 (required for Frappe v16)
 log "Installing Node.js 18..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setp_18.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # Verify Node.js installation
@@ -100,7 +101,7 @@ sudo systemctl enable mariadb
 
 # Secure MariaDB installation
 log "Securing MariaDB installation..."
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'frappe_root_password';"
+sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'frappe';"
 sudo mysql -e "DELETE FROM mysql.user WHERE User='';"
 sudo mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
 sudo mysql -e "DROP DATABASE IF EXISTS test;"
@@ -108,7 +109,7 @@ sudo mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
 sudo mysql -e "FLUSH PRIVILEGES;"
 
 # Configure MariaDB for Frappe
-log "Configuring MariaDB for Frappe..."
+log "Configuring MariaDB for Frappe...
 sudo tee /etc/mysql/mariadb.conf.d/frappe.cnf > /dev/null <<EOF
 [mysqld]
 character-set-client-handshake = FALSE
@@ -147,18 +148,13 @@ cd frappe-bench
 # Create a new site
 bench new-site frappe.localhost --admin-password admin --mariadb-root-password frappe_root_password
 
-# Install ERPNext (optional - uncomment if needed)
-# bench get-app --branch version-16 erpnext
-# bench --site frappe.localhost install-app erpnext
-
 # Set developer mode
 bench --site frappe.localhost set-config developer_mode 1
-
 # Enable scheduler
 bench --site frappe.localhost enable-scheduler
 
-# Setup production (optional)
-# sudo bench setup production frappe
+# Setup production configuration        
+sudo bench setup production frappe --yes
 
 EOF
 
@@ -192,6 +188,7 @@ sudo tee /etc/systemd/system/frappe.service > /dev/null <<EOF
 [Unit]
 Description=Frappe web server
 After=network.target
+
 
 [Service]
 Type=simple
@@ -249,3 +246,41 @@ info "Access your site at: http://frappe.localhost:8000"
 info "Default login: Administrator / admin"
 info ""
 warning "Remember to change default passwords in production!"
+# Configure fail2ban
+log "Configuring fail2ban..."
+sudo systemctl start fail2ban
+sudo systemctl enable fail2ban
+
+# Final system checks
+log "Performing final system checks..."
+sudo systemctl status mariadb --no-pager
+sudo systemctl status redis-server --no-pager
+sudo systemctl status nginx --no-pager
+
+# Start frappe service
+log "Starting Frappe service..."
+sudo systemctl start frappe
+
+log "Installation completed successfully!"
+info "Passwords saved to: /home/frappe/frappe_passwords.txt"
+info ""
+info "=== IMPORTANT NEXT STEPS ==="
+info "1. Access your site at: http://frappe.localhost"
+info "2. Default login: Administrator / admin"
+info "3. Change default passwords immediately!"
+info ""
+info "=== DEVELOPMENT MODE ==="
+info "To start development server manually:"
+info "  sudo -u frappe bash"
+info "  cd /home/frappe/frappe-bench"
+info "  bench start"
+info ""
+info "=== PRODUCTION MODE ==="
+info "Production setup is already configured and running"
+info "Services: nginx, supervisor, mariadb, redis"
+info ""
+warning "Remember to:"
+warning "- Change default passwords"
+warning "- Configure firewall rules"
+warning "- Set up SSL certificates for production"
+warning "- Regular backups"
