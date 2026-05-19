@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Frappe Framework Version 16 Installation Script for Ubuntu 24.04 LTS
+# Frappe Framework Version 16 Installation Script for Ubuntu 22.04 LTS
 # This script installs Frappe Framework v16 with all dependencies
 # Run with: bash install_frappe_ubuntu24.sh
 
@@ -37,11 +37,11 @@ if [[ $EUID -eq 0 ]]; then
 fi
 
 # Check Ubuntu version
-if ! grep -q "24.04" /etc/os-release; then
-    warning "This script is designed for Ubuntu 24.04 LTS. Proceeding anyway..."
+if ! grep -q "22.04" /etc/os-release; then
+    warning "This script is designed for Ubuntu 22.04 LTS. Proceeding anyway..."
 fi
 
-log "Starting Frappe Framework v16 installation on Ubuntu 24.04 LTS"
+log "Starting Frappe Framework v16 installation on Ubuntu 22.04 LTS"
 
 # Update system packages
 log "Updating system packages..."
@@ -81,7 +81,7 @@ sudo apt install -y \
 
 # Install Node.js 18 (required for Frappe v16)
 log "Installing Node.js 18..."
-curl -fsSL https://deb.nodesource.com/setp_18.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # Verify Node.js installation
@@ -109,7 +109,7 @@ sudo mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
 sudo mysql -e "FLUSH PRIVILEGES;"
 
 # Configure MariaDB for Frappe
-log "Configuring MariaDB for Frappe...
+log "Configuring MariaDB for Frappe..."
 sudo tee /etc/mysql/mariadb.conf.d/frappe.cnf > /dev/null <<EOF
 [mysqld]
 character-set-client-handshake = FALSE
@@ -146,23 +146,25 @@ bench init --frappe-branch version-16 frappe-bench
 cd frappe-bench
 
 # Create a new site
-bench new-site frappe.localhost --admin-password admin --mariadb-root-password frappe_root_password
+bench new-site frappe.localhost --admin-password admin --mariadb-root-password frappe
 
 # Set developer mode
 bench --site frappe.localhost set-config developer_mode 1
 # Enable scheduler
 bench --site frappe.localhost enable-scheduler
 
-# Setup production configuration        
-sudo bench setup production frappe --yes
-
 EOF
+
+# Setup production configuration
+log "Setting up production configuration..."
+cd /home/frappe/frappe-bench
+sudo bench setup production frappe --yes
 
 # Configure Nginx (basic configuration)
 log "Configuring Nginx..."
 sudo tee /etc/nginx/sites-available/frappe.localhost > /dev/null <<EOF
 server {
-    listen 80;
+    listen 8081;
     server_name frappe.localhost;
     
     location / {
@@ -213,14 +215,14 @@ log "Saving passwords to file..."
 sudo tee /home/frappe/frappe_passwords.txt > /dev/null <<EOF
 Frappe Installation Passwords:
 =============================
-MariaDB Root Password: frappe_root_password
+MariaDB Root Password: frappe
 Frappe Administrator Password: admin
 Site: frappe.localhost
 
 Access URLs:
 ============
-Local: http://frappe.localhost:8000
-Development: http://127.0.0.1:8000
+Local: http://frappe.localhost:8081
+Development: http://127.0.0.1:8081
 
 Commands to start development server:
 ====================================
@@ -242,7 +244,7 @@ info "  sudo -u frappe bash"
 info "  cd /home/frappe/frappe-bench"
 info "  bench start"
 info ""
-info "Access your site at: http://frappe.localhost:8000"
+info "Access your site at: http://frappe.localhost:8081"
 info "Default login: Administrator / admin"
 info ""
 warning "Remember to change default passwords in production!"
@@ -265,7 +267,7 @@ log "Installation completed successfully!"
 info "Passwords saved to: /home/frappe/frappe_passwords.txt"
 info ""
 info "=== IMPORTANT NEXT STEPS ==="
-info "1. Access your site at: http://frappe.localhost"
+info "1. Access your site at: http://frappe.localhost:8081"
 info "2. Default login: Administrator / admin"
 info "3. Change default passwords immediately!"
 info ""
