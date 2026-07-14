@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # MariaDB Database
+  db:
+    image: mariadb:10.6
+    container_name: frappe_mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: frappe
+      MYSQL_DATABASE: frappe
+      MYSQL_USER: frappe
+      MYSQL_PASSWORD: frappe
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./mariadb.cnf:/etc/mysql/conf.d/frappe.cnf
+    ports:
+      - "3306:3306"
+    networks:
+      - frappe_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: frappe_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - frappe_network
+
+  # Frappe Framework
+  frappe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: frappe_app
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: frappe
+      DB_USER: frappe
+      DB_PASSWORD: frappe
+      DB_ROOT_PASSWORD: frappe
+      REDIS_CACHE: redis://redis:6379/0
+      REDIS_QUEUE: redis://redis:6379/1
+      REDIS_SOCKETIO: redis://redis:6379/2
+      SOCKETIO_PORT: 9000
+      DEVELOPER_MODE: 1
+    volumes:
+      - frappe_data:/home/frappe/frappe-bench
+      - ./apps:/home/frappe/frappe-bench/apps-external
+    ports:
+      - "8081:8000"  # Web interface
+      - "9000:9000"  # SocketIO
+    depends_on:
+      - db
+      - redis
+    networks:
+      - frappe_network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: frappe_nginx
+    restart: unless-stopped
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - frappe_data:/var/www/html:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - frappe
+    networks:
+      - frappe_network
+
+volumes:
+  mariadb_data:
+  redis_data:
+  frappe_data:
+
+networks:
+  frappe_network:
+    driver: bridge

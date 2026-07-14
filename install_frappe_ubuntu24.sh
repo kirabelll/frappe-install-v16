@@ -31,11 +31,6 @@ info() {
     echo -e "${BLUE}[INFO] $1${NC}"
 }
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-   error "This script should not be run as root. Please run as a regular user with sudo privileges."
-fi
-
 # Check Ubuntu version
 if ! grep -q "22.04" /etc/os-release; then
     warning "This script is designed for Ubuntu 22.04 LTS. Proceeding anyway..."

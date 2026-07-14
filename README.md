@@ -1,267 +1,192 @@
-# Frappe Framework v16 & ERPNext v16 Beta Installation Script for Ubuntu 24.04 LTS
+# Frappe Framework v16 Installation
 
-This repository contains an automated installation script for Frappe Framework version 16 and ERPNext v16 Beta on Ubuntu 24.04 LTS.
+This repository contains installation scripts for Frappe Framework v16 on Ubuntu 22.04 LTS.
 
-## What is Frappe Framework & ERPNext?
+## Installation Options
 
-**Frappe Framework** is a full-stack web application framework that uses Python and MariaDB on the server side with a tightly integrated client-side library.
+### 1. Docker Installation (Recommended)
 
-**ERPNext** is a comprehensive ERP system built on Frappe Framework, offering modules for accounting, inventory, CRM, manufacturing, and more.
+The Docker installation provides a containerized setup with all dependencies isolated and properly configured.
 
-## Prerequisites
+#### Quick Start
 
-- Ubuntu 24.04 LTS server or desktop
-- User account with sudo privileges
-- Internet connection
-- At least 4GB RAM and 20GB disk space
-- Root access to MySQL during installation
+```bash
+# Make the script executable
+chmod +x install_docker.sh
 
-## Quick Installation
+# Run the installation
+bash install_docker.sh
+```
 
-1. Clone or download this repository
-2. Make the script executable:
-   ```bash
-   chmod +x install_frappe_ubuntu24.sh
-   ```
-3. Run the installation script:
-   ```bash
-   bash install_frappe_ubuntu24.sh
-   ```
+#### What gets installed:
+- Docker and Docker Compose
+- MariaDB 10.6 container
+- Redis 7 container  
+- Frappe Framework v16 container
+- Nginx reverse proxy container
 
-## What the Script Installs
+#### Access:
+- **Main Application**: http://frappe.localhost
+- **Direct Access**: http://localhost:8081
+- **Default Login**: Administrator / admin
 
-### System Dependencies
-- Python 3 development tools
-- MariaDB server and client
-- Redis server
-- Node.js 18 and Yarn
-- Nginx web server
-- Git, curl, wget
-- Build tools and libraries
-- wkhtmltopdf for PDF generation
-- fail2ban for security
-- Supervisor for process management
+#### Docker Commands:
+```bash
+# Start services
+docker-compose up -d
 
-### Frappe Components
-- Frappe Framework version 16
-- ERPNext version 16 Beta
-- Bench (Frappe's CLI tool)
-- A new site at `frappe.localhost`
-- Production-ready configuration
+# Stop services
+docker-compose down
+
+# View logs
+docker-compose logs -f
+
+# Enter Frappe container
+docker-compose exec frappe bash
+
+# Restart services
+docker-compose restart
+```
+
+### 2. Native Installation
+
+The native installation installs Frappe directly on the Ubuntu system.
+
+#### Quick Start
+
+```bash
+# Make the script executable
+chmod +x install_frappe_ubuntu24.sh
+
+# Run the installation
+bash install_frappe_ubuntu24.sh
+```
+
+#### Access:
+- **Application**: http://frappe.localhost:8081
+- **Default Login**: Administrator / admin
+
+## Files Structure
+
+```
+.
+├── install_docker.sh           # Docker-based installation script
+├── install_frappe_ubuntu24.sh  # Native installation script  
+├── docker-compose.yml          # Docker services configuration
+├── Dockerfile                  # Frappe container image
+├── start.sh                    # Container startup script
+├── supervisord.conf            # Process management config
+├── mariadb.cnf                 # MariaDB configuration
+├── nginx.conf                  # Nginx configuration
+├── apps/                       # Directory for external apps
+└── README.md                   # This file
+```
 
 ## Post-Installation
 
-After successful installation:
-
-1. **Access your site:**
-   - URL: `http://frappe.localhost`
-   - Username: `Administrator`
-   - Password: `admin`
-
-2. **For development mode:**
-   ```bash
-   sudo -u frappe bash
-   cd /home/frappe/frappe-bench
-   bench start
-   ```
-   Then access: `http://frappe.localhost:8000`
-
-3. **Check installation details:**
-   ```bash
-   cat /home/frappe/frappe_passwords.txt
-   ```
-
-## Installation Steps Overview
-
-The script follows these major steps:
-
-1. **Initial Setup** - System updates and user verification
-2. **Install Prerequisites** - Python, Node.js, system libraries
-3. **Configure MariaDB** - Database server setup and security
-4. **Install Additional Dependencies** - Redis, Nginx, build tools
-5. **Install Frappe Bench** - Framework management tool
-6. **Create New Site** - Site creation with ERPNext installation
-7. **Production Setup** - Nginx, Supervisor configuration
-8. **Security Configuration** - fail2ban setup
-
-## Important Security Notes
-
-⚠️ **Change default passwords immediately!**
-
-- MariaDB root password: `frappe_root_password`
-- Frappe Administrator password: `admin`
-
-## Common Commands
+### Security (Important!)
+1. **Change default passwords immediately**
+2. Configure firewall rules
+3. Set up SSL certificates for production
+4. Regular backups
 
 ### Development
 ```bash
-# Switch to frappe user
-sudo -u frappe bash
-
-# Navigate to bench directory
+# Enter Frappe bench (Docker)
+docker-compose exec frappe bash
 cd /home/frappe/frappe-bench
 
-# Start development server
-bench start
+# Enter Frappe bench (Native)
+sudo -u frappe bash
+cd /home/frappe/frappe-bench
 
-# Create new app
-bench new-app myapp
-
-# Install app to site
-bench --site frappe.localhost install-app myapp
-
-# Update bench and apps
-bench update
-
-# Database migration
-bench migrate
+# Common bench commands
+bench start                                    # Start development server
+bench new-site <sitename>                    # Create new site
+bench --site <sitename> install-app <app>    # Install app
+bench migrate                                 # Run migrations
+bench --site <sitename> set-config developer_mode 1  # Enable dev mode
 ```
 
-### Production Management
+### Adding Custom Apps
+
+#### Docker Installation
+1. Place your app in the `apps/` directory
+2. Rebuild containers: `docker-compose up --build -d`
+
+#### Native Installation
 ```bash
+cd /home/frappe/frappe-bench
+bench get-app <app-source>
+bench --site <sitename> install-app <appname>
+```
+
+## Troubleshooting
+
+### Docker Issues
+```bash
+# Check container status
+docker-compose ps
+
+# View container logs
+docker-compose logs -f frappe
+
 # Restart all services
-sudo supervisorctl restart all
+docker-compose restart
 
-# Check service status
-sudo systemctl status nginx
-sudo systemctl status mariadb
-sudo systemctl status redis-server
-
-# Restart individual services
-sudo systemctl restart nginx
-sudo systemctl restart mariadb
+# Rebuild containers
+docker-compose up --build -d
 ```
 
-## Troubleshooting Guide
-
-### 1. Internal Server Error
-
-**Possible Causes:**
-- MySQL database issues
-- Code errors in hooks.py
-
-**Solutions:**
+### Permission Issues (Native)
 ```bash
-# Database migration
-bench migrate
-
-# Check MySQL status
-sudo systemctl status mariadb
-
-# Restart MySQL if needed
-sudo systemctl restart mariadb
-```
-
-### 2. "Sorry! We will be back soon" Error
-
-**Possible Cause:**
-- Supervisor service issues
-
-**Solution:**
-```bash
-# Restart supervisor
-bench restart
-# OR
-sudo supervisorctl restart all
-```
-
-### 3. "This site can't be reached" Error
-
-**Possible Causes:**
-- fail2ban service blocking connections
-- Nginx not running or misconfigured
-
-**Solutions:**
-```bash
-# Stop fail2ban temporarily
-sudo systemctl stop fail2ban
-
-# Check and restart Nginx
-sudo systemctl status nginx
-sudo systemctl restart nginx
-
-# Check Nginx configuration
-sudo nginx -t
-```
-
-### 4. Permission Issues
-```bash
-# Fix ownership
+# Fix bench permissions
 sudo chown -R frappe:frappe /home/frappe/frappe-bench
 
-# Fix permissions
-sudo chmod -R 755 /home/frappe/frappe-bench
+# Add user to required groups
+sudo usermod -aG sudo frappe
 ```
 
-### 5. Node.js Version Issues
-```bash
-# Check Node.js version (should be v18.x)
-node --version
-npm --version
+### Database Connection Issues
+- Ensure MariaDB service is running
+- Check database credentials in site config
+- Verify network connectivity between services
 
-# If wrong version, reinstall Node.js 18
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs
-```
+## System Requirements
 
-## Log Files
+- Ubuntu 22.04 LTS (recommended)
+- 4GB RAM minimum (8GB recommended)
+- 20GB free disk space
+- Docker and Docker Compose (for Docker installation)
 
-- Bench logs: `/home/frappe/frappe-bench/logs/`
-- MariaDB logs: `/var/log/mysql/`
-- Nginx logs: `/var/log/nginx/`
-- Supervisor logs: `/var/log/supervisor/`
+## Ports Used
 
-## File Structure
+### Docker Installation
+- **80**: Nginx reverse proxy
+- **8081**: Direct Frappe access  
+- **3306**: MariaDB (exposed for external access)
 
-```
-/home/frappe/frappe-bench/
-├── apps/
-│   ├── frappe/          # Frappe Framework
-│   └── erpnext/         # ERPNext application
-├── sites/
-│   └── frappe.localhost/  # Your site
-├── config/
-├── logs/
-└── env/                 # Python virtual environment
-```
+### Native Installation
+- **8081**: Frappe web interface
+- **3306**: MariaDB
+- **6379**: Redis
 
-## Service Management
+## Default Credentials
 
-### Systemd Services
-- `frappe.service` - Main Frappe application
-- `nginx.service` - Web server
-- `mariadb.service` - Database server
-- `redis-server.service` - Cache server
-- `fail2ban.service` - Security service
+- **Frappe Admin**: Administrator / admin
+- **Database**: frappe / frappe
+- **MariaDB Root**: root / frappe
 
-### Supervisor Processes
-- Web workers
-- Background workers
-- Scheduler
-- Socket.io server
-
-## Additional Resources
-
-- [Official Frappe Documentation](https://docs.frappe.io/framework)
-- [ERPNext Documentation](https://docs.erpnext.com/)
-- [Frappe GitHub Repository](https://github.com/frappe/frappe)
-- [ERPNext GitHub Repository](https://github.com/frappe/erpnext)
-- [Frappe Community Forum](https://discuss.frappe.io/)
-- [Frappe School](https://frappe.school/)
+**⚠️ Change these passwords immediately after installation!**
 
 ## Support
 
-If you encounter issues:
-
-1. Check the troubleshooting section above
-2. Review log files for error messages
-3. Visit the [Frappe Community Forum](https://discuss.frappe.io/)
-4. Check the [official documentation](https://docs.frappe.io/framework)
+For issues and questions:
+1. Check the logs for error messages
+2. Verify all services are running
+3. Ensure proper file permissions
+4. Review Frappe Framework documentation
 
 ## License
 
-This installation script is provided as-is. Frappe Framework and ERPNext are licensed under MIT License.
-
----
-
-**Note:** This script installs ERPNext v16 Beta. For production use, consider using stable releases when available.
+This installation script is provided as-is for educational and development purposes.
