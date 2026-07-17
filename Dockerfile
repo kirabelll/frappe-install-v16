@@ -59,10 +59,8 @@ RUN pip3 install --user frappe-bench
 # Add local bin to PATH
 ENV PATH="/home/frappe/.local/bin:$PATH"
 
-# Initialize bench with Frappe v16
-RUN bench init --frappe-branch version-16 frappe-bench --python python3
-
-# Switch to bench directory
+# Create bench directory (initialization will happen at startup)
+RUN mkdir -p /home/frappe/frappe-bench
 WORKDIR /home/frappe/frappe-bench
 
 # Create startup script

@@ -16,6 +16,12 @@ warning() {
     echo -e "${YELLOW}[WARNING] $1${NC}"
 }
 
+# Initialize bench if not already done
+if [ ! -f "/home/frappe/frappe-bench/sites/common_site_config.json" ]; then
+    log "Initializing bench with Frappe v16..."
+    su - frappe -c "cd /home/frappe && bench init --frappe-branch version-16 frappe-bench --python python3"
+fi
+
 # Change to frappe user and bench directory
 cd /home/frappe/frappe-bench
 
