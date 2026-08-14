@@ -74,9 +74,9 @@ sudo apt install -y \
     pkg-config \
     fail2ban
 
-# Install Node.js 18 (required for Frappe v16)
-log "Installing Node.js 18..."
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+# Install Node.js (latest LTS)
+log "Installing latest Node.js LTS..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # Verify Node.js installation
