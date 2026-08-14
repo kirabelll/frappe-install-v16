@@ -84,9 +84,9 @@ sudo add-apt-repository -y ppa:deadsnakes/ppa
 sudo apt update
 sudo apt install -y python3.14 python3.14-dev python3.14-venv
 
-# Install Node.js (latest LTS)
-log "Installing latest Node.js LTS..."
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Install Node.js 24 (required for Frappe v16: engine "node" >= 24)
+log "Installing Node.js 24..."
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt install -y nodejs
 
 # Verify Node.js installation
