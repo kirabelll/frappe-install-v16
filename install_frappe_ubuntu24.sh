@@ -6,6 +6,10 @@
 
 set -e
 
+# Disable PEP 668 externally managed environment restriction for pip (Ubuntu 24.04 / Python 3.12+)
+export PIP_BREAK_SYSTEM_PACKAGES=1
+sudo rm -f /usr/lib/python3.*/EXTERNALLY-MANAGED 2>/dev/null || true
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -73,6 +77,12 @@ sudo apt install -y \
     libmysqlclient-dev \
     pkg-config \
     fail2ban
+
+# Install Python 3.14 (required for Python >= 3.14 dependency requirements)
+log "Installing Python 3.14..."
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install -y python3.14 python3.14-dev python3.14-venv
 
 # Install Node.js (latest LTS)
 log "Installing latest Node.js LTS..."
@@ -154,10 +164,11 @@ sudo -H PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install frappe-bench --break-system-pac
 # Switch to frappe user and setup bench
 log "Setting up bench as frappe user..."
 sudo -u frappe bash <<'EOF'
+export PIP_BREAK_SYSTEM_PACKAGES=1
 cd /home/frappe
 
-# Initialize bench with Frappe v16
-bench init --frappe-branch version-16 frappe-bench
+# Initialize bench with Python 3.14 (satisfies Python >= 3.14 requirement)
+bench init --frappe-branch version-16 --python python3.14 frappe-bench
 cd frappe-bench
 
 # Create a new site
