@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Frappe Framework Version 16 Installation Script for Ubuntu 22.04 LTS
+# Frappe Framework Version 16 Installation Script for Ubuntu 22.04 / 24.04 LTS
 # This script installs Frappe Framework v16 with all dependencies
 # Run with: bash install_frappe_ubuntu24.sh
 
@@ -32,11 +32,11 @@ info() {
 }
 
 # Check Ubuntu version
-if ! grep -q "22.04" /etc/os-release; then
-    warning "This script is designed for Ubuntu 22.04 LTS. Proceeding anyway..."
+if ! grep -qE "22.04|24.04" /etc/os-release; then
+    warning "This script is designed for Ubuntu 22.04/24.04 LTS. Proceeding anyway..."
 fi
 
-log "Starting Frappe Framework v16 installation on Ubuntu 22.04 LTS"
+log "Starting Frappe Framework v16 installation on Ubuntu"
 
 # Update system packages
 log "Updating system packages..."
@@ -96,12 +96,28 @@ sudo systemctl enable mariadb
 
 # Secure MariaDB installation
 log "Securing MariaDB installation..."
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY 'frappe';"
-sudo mysql -e "DELETE FROM mysql.user WHERE User='';"
-sudo mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
-sudo mysql -e "DROP DATABASE IF EXISTS test;"
-sudo mysql -e "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';"
-sudo mysql -e "FLUSH PRIVILEGES;"
+MARIADB_PASS="frappe"
+
+# Connect using existing password if set, otherwise connect without password, and execute all commands in a single session
+if sudo mysql -u root -p"${MARIADB_PASS}" -e "SELECT 1;" >/dev/null 2>&1; then
+    sudo mysql -u root -p"${MARIADB_PASS}" <<EOF
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MARIADB_PASS}';
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+FLUSH PRIVILEGES;
+EOF
+else
+    sudo mysql -u root <<EOF
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MARIADB_PASS}';
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
+FLUSH PRIVILEGES;
+EOF
+fi
 
 # Configure MariaDB for Frappe
 log "Configuring MariaDB for Frappe..."
