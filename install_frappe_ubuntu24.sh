@@ -149,7 +149,7 @@ sudo usermod -aG sudo frappe
 
 # Install bench
 log "Installing bench..."
-sudo -H pip3 install frappe-bench
+sudo -H PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install frappe-bench --break-system-packages
 
 # Switch to frappe user and setup bench
 log "Setting up bench as frappe user..."
