@@ -138,9 +138,13 @@ log "Starting Redis server..."
 sudo systemctl start redis-server
 sudo systemctl enable redis-server
 
-# Create frappe user
+# Create frappe user if not exists
 log "Creating frappe user..."
-sudo adduser --disabled-password --gecos "" frappe
+if id "frappe" &>/dev/null; then
+    info "User 'frappe' already exists. Skipping user creation."
+else
+    sudo adduser --disabled-password --gecos "" frappe
+fi
 sudo usermod -aG sudo frappe
 
 # Install bench
