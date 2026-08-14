@@ -175,7 +175,7 @@ sudo bench setup production frappe --yes
 log "Configuring Nginx..."
 sudo tee /etc/nginx/sites-available/frappe.localhost > /dev/null <<EOF
 server {
-    listen 8081;
+    listen 8080;
     server_name frappe.localhost;
     
     location / {
@@ -232,8 +232,8 @@ Site: frappe.localhost
 
 Access URLs:
 ============
-Local: http://frappe.localhost:8081
-Development: http://127.0.0.1:8081
+Local: http://frappe.localhost:8080
+Development: http://127.0.0.1:8080
 
 Commands to start development server:
 ====================================
@@ -255,7 +255,7 @@ info "  sudo -u frappe bash"
 info "  cd /home/frappe/frappe-bench"
 info "  bench start"
 info ""
-info "Access your site at: http://frappe.localhost:8081"
+info "Access your site at: http://frappe.localhost:8080"
 info "Default login: Administrator / admin"
 info ""
 warning "Remember to change default passwords in production!"
@@ -278,7 +278,7 @@ log "Installation completed successfully!"
 info "Passwords saved to: /home/frappe/frappe_passwords.txt"
 info ""
 info "=== IMPORTANT NEXT STEPS ==="
-info "1. Access your site at: http://frappe.localhost:8081"
+info "1. Access your site at: http://frappe.localhost:8080"
 info "2. Default login: Administrator / admin"
 info "3. Change default passwords immediately!"
 info ""
