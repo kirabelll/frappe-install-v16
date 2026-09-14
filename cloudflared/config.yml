@@ -1,0 +1,8 @@
+tunnel: 9ee345d8-6234-4dfd-8a2d-4e6734ca357b
+credentials-file: /home/frappe/.cloudflared/9ee345d8-6234-4dfd-8a2d-4e6734ca357b.json
+
+ingress:
+  - hostname: nelliys.tafoilplc.com
+    service: http://127.0.0.1:80
+  - service: http_status:404
+
