@@ -19,8 +19,8 @@ CLOUDFLARED_BIN=$(command -v cloudflared)
 echo "Using cloudflared at: $CLOUDFLARED_BIN"
 
 # Tunnel configuration
-TUNNEL_ID="9ee345d8-6234-4dfd-8a2d-4e6734ca357b"
-CRED_FILE="/home/frappe/.cloudflared/9ee345d8-6234-4dfd-8a2d-4e6734ca357b.json"
+TUNNEL_ID="a6c8b179-553d-49c8-8c52-d2c0c41046d9"
+CRED_FILE="/home/frappe/.cloudflared/a6c8b179-553d-49c8-8c52-d2c0c41046d9.json"
 CONFIG_FILE="/home/frappe/.cloudflared/config.yml"
 
 # --- 2. Choose Execution Mode ---
