@@ -18,14 +18,17 @@ fi
 CLOUDFLARED_BIN=$(command -v cloudflared)
 echo "Using cloudflared at: $CLOUDFLARED_BIN"
 
-# --- 2. Choose ONE of the ExecStart lines below ---
+# Tunnel configuration
+TUNNEL_ID="9ee345d8-6234-4dfd-8a2d-4e6734ca357b"
+CRED_FILE="/home/frappe/.cloudflared/9ee345d8-6234-4dfd-8a2d-4e6734ca357b.json"
+CONFIG_FILE="/home/frappe/.cloudflared/config.yml"
 
-# OPTION A: Token-based tunnel (recommended, simplest)
-# Replace YOUR_TUNNEL_TOKEN with your actual token from the Cloudflare Zero Trust dashboard
-EXEC_START="$CLOUDFLARED_BIN tunnel run --token 9ee345d8-6234-4dfd-8a2d-4e6734ca357b"
+# --- 2. Choose Execution Mode ---
+# OPTION A: Credentials-file-based tunnel (matches your JSON credentials file)
+EXEC_START="$CLOUDFLARED_BIN tunnel --credentials-file $CRED_FILE run $TUNNEL_ID"
 
-# OPTION B: Config-file-based tunnel (comment out Option A above, uncomment this)
-# EXEC_START="$CLOUDFLARED_BIN tunnel --config /etc/cloudflared/config.yml run"
+# OPTION B: Config-file-based tunnel (uncomment if you have a config.yml with ingress rules)
+# EXEC_START="$CLOUDFLARED_BIN tunnel --config $CONFIG_FILE run"
 
 # --- 3. Write the systemd unit file ---
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
@@ -39,7 +42,8 @@ Type=notify
 ExecStart=$EXEC_START
 Restart=on-failure
 RestartSec=5
-User=root
+User=frappe
+Group=frappe
 NoNewPrivileges=true
 
 [Install]
