@@ -116,28 +116,63 @@ install_essentials() {
     log_success "Essential packages installed"
 }
 
-# Install Python 3.11
+# Install Python (version depends on Ubuntu release)
 install_python() {
     log_info "Installing Python ${PYTHON_VERSION}..."
 
-    # Add deadsnakes PPA for Python 3.11 on Ubuntu 22.04
-    if [[ "$VERSION_ID" == "22.04" ]]; then
-        sudo add-apt-repository -y ppa:deadsnakes/ppa
-        sudo apt-get update -y
+    # Determine Python installation strategy based on Ubuntu version
+    case "$VERSION_ID" in
+        22.04)
+            # Ubuntu 22.04: Python 3.10 default, need deadsnakes for 3.11
+            log_info "Adding deadsnakes PPA for Python 3.11 on Ubuntu 22.04..."
+            sudo add-apt-repository -y ppa:deadsnakes/ppa
+            sudo apt-get update -y
+            PYTHON_PACKAGES=(
+                python${PYTHON_VERSION}
+                python${PYTHON_VERSION}-venv
+                python${PYTHON_VERSION}-dev
+                python${PYTHON_VERSION}-distutils
+            )
+            ;;
+        24.04)
+            # Ubuntu 24.04: Python 3.12 default, but 3.11 available in universe
+            log_info "Ubuntu 24.04 detected - Python 3.11 available in universe repository..."
+            sudo apt-get update -y
+            # Enable universe if not already enabled
+            sudo add-apt-repository -y universe
+            sudo apt-get update -y
+            PYTHON_PACKAGES=(
+                python3.11
+                python3.11-venv
+                python3.11-dev
+                python3.11-distutils
+            )
+            PYTHON_VERSION="3.11"
+            ;;
+        *)
+            # Other versions: try default repository
+            log_warning "Ubuntu $VERSION_ID - attempting to install Python 3.11 from default repos..."
+            sudo apt-get update -y
+            PYTHON_PACKAGES=(
+                python3.11
+                python3.11-venv
+                python3.11-dev
+                python3.11-distutils
+            )
+            ;;
+    esac
+
+    # Install Python packages
+    sudo apt-get install -y "${PYTHON_PACKAGES[@]}"
+
+    # Set python3.11 as default python3 (if not already)
+    if command -v python3.11 &>/dev/null; then
+        sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+        sudo update-alternatives --set python3 /usr/bin/python3.11
     fi
 
-    sudo apt-get install -y \
-        python${PYTHON_VERSION} \
-        python${PYTHON_VERSION}-venv \
-        python${PYTHON_VERSION}-dev \
-        python${PYTHON_VERSION}-distutils
-
-    # Set python3.11 as default python3
-    sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
-    sudo update-alternatives --set python3 /usr/bin/python${PYTHON_VERSION}
-
     # Upgrade pip
-    python3 -m pip install --upgrade pip setuptools wheel
+    python3 -m pip install --upgrade pip setuptools wheel --break-system-packages
 
     log_success "Python ${PYTHON_VERSION} installed"
 }
