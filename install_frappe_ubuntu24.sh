@@ -22,7 +22,7 @@ FRAPPE_HOME="/home/${FRAPPE_USER}"
 FRAPPE_BENCH_DIR="${FRAPPE_BENCH_DIR:-${FRAPPE_HOME}/frappe-bench}"
 PYTHON_VERSION="3.14"
 NODE_VERSION="24"
-MARIADB_VERSION="10.11"
+MARIADB_VERSION="11.8"
 REDIS_VERSION="7"
 
 # Logging functions
@@ -116,32 +116,21 @@ install_essentials() {
     log_success "Essential packages installed"
 }
 
-# Install Python 3.14
+# Install uv and Python 3.14 for the Frappe user. Ubuntu 24.04 ships Python 3.12,
+# so Python 3.14 must be installed separately rather than through apt.
 install_python() {
-    log_info "Installing Python ${PYTHON_VERSION}..."
-
-    # Add deadsnakes PPA to provide newer Python releases on Ubuntu 22.04.
-    if [[ "$VERSION_ID" == "22.04" ]]; then
-        sudo add-apt-repository -y ppa:deadsnakes/ppa
-        sudo apt-get update -y
-    fi
-
-    sudo apt-get install -y \
-        python${PYTHON_VERSION} \
-        python${PYTHON_VERSION}-venv \
-        python${PYTHON_VERSION}-dev
-
-    # Set Python 3.14 as default python3
-    sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
-    sudo update-alternatives --set python3 /usr/bin/python${PYTHON_VERSION}
-
-    # Upgrade pip
-    python3 -m pip install --upgrade pip setuptools wheel
-
+    log_info "Installing uv and Python ${PYTHON_VERSION} for ${FRAPPE_USER}..."
+    sudo -H -u "${FRAPPE_USER}" bash -c '
+        set -e
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        export PATH="$HOME/.local/bin:$PATH"
+        uv python install "'"${PYTHON_VERSION}"'"
+        uv python find "'"${PYTHON_VERSION}"'" | grep -q .
+    '
     log_success "Python ${PYTHON_VERSION} installed"
 }
 
-# Install Node.js 20
+# Install Node.js 24
 install_nodejs() {
     log_info "Installing Node.js ${NODE_VERSION}..."
 
@@ -273,13 +262,14 @@ install_wkhtmltopdf() {
 install_bench() {
     log_info "Installing bench CLI..."
 
-    # Install bench as the frappe user
-    sudo -H -u "${FRAPPE_USER}" bash -c "
-        cd ${FRAPPE_HOME}
-        pip3 install --user --break-system-packages frappe-bench
-        echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc
-        source ~/.bashrc
-    "
+    # Install bench with uv so it does not modify Ubuntu's system Python.
+    sudo -H -u "${FRAPPE_USER}" bash -c '
+        set -e
+        export PATH="$HOME/.local/bin:$PATH"
+        uv tool install frappe-bench --python '"${PYTHON_VERSION}"'
+        grep -qxF "export PATH=\$HOME/.local/bin:\$PATH" "$HOME/.bashrc" || \
+            echo "export PATH=\$HOME/.local/bin:\$PATH" >> "$HOME/.bashrc"
+    '
 
     log_success "Bench CLI installed"
 }
@@ -288,11 +278,12 @@ install_bench() {
 init_frappe_bench() {
     log_info "Initializing Frappe Bench (version ${FRAPPE_VERSION})..."
 
-    sudo -H -u "${FRAPPE_USER}" bash -c "
-        cd ${FRAPPE_HOME}
-        export PATH=\"\$HOME/.local/bin:\$PATH\"
-        bench init frappe-bench --frappe-branch ${FRAPPE_VERSION} --python /usr/bin/python3
-    "
+    sudo -H -u "${FRAPPE_USER}" bash -c '
+        set -e
+        cd "'"${FRAPPE_HOME}"'"
+        export PATH="$HOME/.local/bin:$PATH"
+        bench init frappe-bench --frappe-branch '"${FRAPPE_VERSION}"' --python "$(uv python find '"${PYTHON_VERSION}"')"
+    '
 
     log_success "Frappe Bench initialized"
 }
@@ -485,12 +476,12 @@ main() {
 
     update_system
     install_essentials
+    create_frappe_user
     install_python
     install_nodejs
     install_mariadb
     install_redis
     install_nginx
-    create_frappe_user
     install_wkhtmltopdf
     install_bench
     init_frappe_bench
