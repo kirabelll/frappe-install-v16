@@ -197,7 +197,7 @@ install_redis() {
     log_info "Installing Redis ${REDIS_VERSION}..."
 
     # Add Redis repository
-    curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+    curl -fsSL https://packages.redis.io/gpg | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
     echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
 
     sudo apt-get update -y
@@ -242,19 +242,18 @@ create_frappe_user() {
     sudo usermod -aG "${FRAPPE_USER}" "$USER"
 }
 
-# Install wkhtmltopdf
-install_wkhtmltopdf() {
-    log_info "Installing wkhtmltopdf..."
+# Set up Chromium for Frappe v16 PDF generation
+setup_chromium() {
+    log_info "Setting up Chromium for Frappe v16..."
 
-    cd /tmp
-    WKHTML_VERSION="0.12.6.1-3"
-    WKHTML_FILE="wkhtmltox_${WKHTML_VERSION}_$(lsb_release -cs)_amd64.deb"
+    sudo -H -u "${FRAPPE_USER}" bash -c '
+        set -e
+        cd "'"${FRAPPE_BENCH_DIR}"'"
+        export PATH="$HOME/.local/bin:$PATH"
+        bench setup-chrome
+    '
 
-    wget -q "https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTML_VERSION}/${WKHTML_FILE}"
-    sudo apt-get install -y ./"${WKHTML_FILE}"
-    rm -f "${WKHTML_FILE}"
-
-    log_success "wkhtmltopdf installed"
+    log_success "Chromium configured for Frappe"
 }
 
 # Install bench CLI
@@ -265,7 +264,7 @@ install_bench() {
     sudo -H -u "${FRAPPE_USER}" bash -c '
         set -e
         export PATH="$HOME/.local/bin:$PATH"
-        uv tool install frappe-bench --python '"${PYTHON_VERSION}"'
+        uv tool install --upgrade frappe-bench --python '"${PYTHON_VERSION}"'
         grep -qxF "export PATH=\$HOME/.local/bin:\$PATH" "$HOME/.bashrc" || \
             echo "export PATH=\$HOME/.local/bin:\$PATH" >> "$HOME/.bashrc"
     '
@@ -276,6 +275,15 @@ install_bench() {
 # Initialize Frappe Bench
 init_frappe_bench() {
     log_info "Initializing Frappe Bench (version ${FRAPPE_VERSION})..."
+
+    if [[ -d "${FRAPPE_BENCH_DIR}" ]]; then
+        if [[ -x "${FRAPPE_BENCH_DIR}/env/bin/python" && -d "${FRAPPE_BENCH_DIR}/apps/frappe" ]]; then
+            log_warning "Bench directory already exists; keeping the existing bench"
+            return
+        fi
+        log_error "${FRAPPE_BENCH_DIR} exists but is not a complete bench. Move it aside and rerun the installer."
+        exit 1
+    fi
 
     sudo -H -u "${FRAPPE_USER}" bash -c '
         set -e
@@ -315,6 +323,11 @@ create_site() {
     local mariadb_root_password="${3:-}"
 
     log_info "Creating new site: ${site_name}..."
+
+    if [[ -d "${FRAPPE_BENCH_DIR}/sites/${site_name}" ]]; then
+        log_warning "Site ${site_name} already exists; skipping creation"
+        return
+    fi
 
     if [[ -z "$mariadb_root_password" ]]; then
         log_warning "MariaDB root password not provided. You'll need to enter it manually."
@@ -481,9 +494,9 @@ main() {
     install_mariadb
     install_redis
     install_nginx
-    install_wkhtmltopdf
     install_bench
     init_frappe_bench
+    setup_chromium
     configure_bench
     create_site "$site_name" "$admin_password" "$mariadb_root_password"
     setup_production
