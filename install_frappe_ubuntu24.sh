@@ -1,14 +1,12 @@
 #!/bin/bash
+# =============================================================================
+# Frappe Framework v16 Installation Script for Ubuntu
+# =============================================================================
+# This script installs Frappe Framework v16 with all dependencies on Ubuntu 22.04/24.04
+# Run as a non-root user with sudo privileges
+# =============================================================================
 
-# Frappe Framework Version 16 Installation Script for Ubuntu 22.04 / 24.04 LTS
-# This script installs Frappe Framework v16 with all dependencies
-# Run with: bash install_frappe_ubuntu24.sh
-
-set -e
-
-# Disable PEP 668 externally managed environment restriction for pip (Ubuntu 24.04 / Python 3.12+)
-export PIP_BREAK_SYSTEM_PACKAGES=1
-sudo rm -f /usr/lib/python3.*/EXTERNALLY-MANAGED 2>/dev/null || true
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -17,298 +15,571 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Logging function
-log() {
-    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
+# Configuration
+FRAPPE_VERSION="version-16"
+FRAPPE_USER="${FRAPPE_USER:-frappe}"
+FRAPPE_HOME="/home/${FRAPPE_USER}"
+FRAPPE_BENCH_DIR="${FRAPPE_BENCH_DIR:-${FRAPPE_HOME}/frappe-bench}"
+PYTHON_VERSION="3.11"
+NODE_VERSION="20"
+MARIADB_VERSION="10.11"
+REDIS_VERSION="7"
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-error() {
-    echo -e "${RED}[ERROR] $1${NC}"
-    exit 1
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-warning() {
-    echo -e "${YELLOW}[WARNING] $1${NC}"
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
-info() {
-    echo -e "${BLUE}[INFO] $1${NC}"
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Check if running as root
+check_root() {
+    if [[ $EUID -eq 0 ]]; then
+        log_error "This script should not be run as root. Run as a user with sudo privileges."
+        exit 1
+    fi
 }
 
 # Check Ubuntu version
-if ! grep -qE "22.04|24.04" /etc/os-release; then
-    warning "This script is designed for Ubuntu 22.04/24.04 LTS. Proceeding anyway..."
-fi
+check_ubuntu() {
+    if [[ ! -f /etc/os-release ]]; then
+        log_error "Cannot detect OS. This script is for Ubuntu."
+        exit 1
+    fi
 
-log "Starting Frappe Framework v16 installation on Ubuntu"
+    source /etc/os-release
+    if [[ "$ID" != "ubuntu" ]]; then
+        log_error "This script is for Ubuntu. Detected: $ID"
+        exit 1
+    fi
+
+    log_info "Detected Ubuntu $VERSION_ID ($VERSION_CODENAME)"
+
+    # Check for supported versions
+    case "$VERSION_ID" in
+        22.04|24.04)
+            log_success "Ubuntu $VERSION_ID is supported"
+            ;;
+        *)
+            log_warning "Ubuntu $VERSION_ID may not be fully tested. Proceeding anyway..."
+            ;;
+    esac
+}
+
+# Check sudo privileges
+check_sudo() {
+    if ! sudo -n true 2>/dev/null; then
+        log_info "This script requires sudo privileges. You may be prompted for your password."
+        sudo -v
+    fi
+}
 
 # Update system packages
-log "Updating system packages..."
-sudo apt update && sudo apt upgrade -y
+update_system() {
+    log_info "Updating system packages..."
+    sudo apt-get update -y
+    sudo apt-get upgrade -y
+    log_success "System updated"
+}
 
-# Install system dependencies
-log "Installing system dependencies..."
-sudo apt install -y \
-    python3-dev \
-    python3-pip \
-    python3-venv \
-    python3-setuptools \
-    software-properties-common \
-    mariadb-server \
-    mariadb-client \
-    redis-server \
-    xvfb \
-    libfontconfig \
-    wkhtmltopdf \
-    git \
-    curl \
-    wget \
-    nginx \
-    supervisor \
-    cron \
-    build-essential \
-    libssl-dev \
-    libffi-dev \
-    libxml2-dev \
-    libxslt1-dev \
-    libjpeg-dev \
-    libpng-dev \
-    zlib1g-dev \
-    libmysqlclient-dev \
-    pkg-config \
-    fail2ban
+# Install essential packages
+install_essentials() {
+    log_info "Installing essential packages..."
+    sudo apt-get install -y \
+        software-properties-common \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        wget \
+        gnupg \
+        lsb-release \
+        git \
+        build-essential \
+        libssl-dev \
+        libffi-dev \
+        python3-dev \
+        python3-venv \
+        python3-pip \
+        pkg-config \
+        libmariadb-dev \
+        libmariadb-dev-compat
+    log_success "Essential packages installed"
+}
 
-# Install Python 3.14 (required for Python >= 3.14 dependency requirements)
-log "Installing Python 3.14..."
-sudo add-apt-repository -y ppa:deadsnakes/ppa
-sudo apt update
-sudo apt install -y python3.14 python3.14-dev python3.14-venv
+# Install Python 3.11
+install_python() {
+    log_info "Installing Python ${PYTHON_VERSION}..."
 
-# Install Node.js 24 (required for Frappe v16: engine "node" >= 24)
-log "Installing Node.js 24..."
-curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
-sudo apt install -y nodejs
+    # Add deadsnakes PPA for Python 3.11 on Ubuntu 22.04
+    if [[ "$VERSION_ID" == "22.04" ]]; then
+        sudo add-apt-repository -y ppa:deadsnakes/ppa
+        sudo apt-get update -y
+    fi
 
-# Verify Node.js installation
-node_version=$(node --version)
-npm_version=$(npm --version)
-log "Node.js version: $node_version"
-log "npm version: $npm_version"
+    sudo apt-get install -y \
+        python${PYTHON_VERSION} \
+        python${PYTHON_VERSION}-venv \
+        python${PYTHON_VERSION}-dev \
+        python${PYTHON_VERSION}-distutils
 
-# Install Yarn
-log "Installing Yarn..."
-sudo npm install -g yarn
+    # Set python3.11 as default python3
+    sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
+    sudo update-alternatives --set python3 /usr/bin/python${PYTHON_VERSION}
 
-# Configure MariaDB
-log "Configuring MariaDB..."
-sudo systemctl start mariadb
-sudo systemctl enable mariadb
+    # Upgrade pip
+    python3 -m pip install --upgrade pip setuptools wheel
 
-# Secure MariaDB installation
-log "Securing MariaDB installation..."
-MARIADB_PASS="frappe"
+    log_success "Python ${PYTHON_VERSION} installed"
+}
 
-# Connect using existing password if set, otherwise connect without password, and execute all commands in a single session
-if sudo mysql -u root -p"${MARIADB_PASS}" -e "SELECT 1;" >/dev/null 2>&1; then
-    sudo mysql -u root -p"${MARIADB_PASS}" <<EOF
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${MARIADB_PASS}';
-DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-FLUSH PRIVILEGES;
+# Install Node.js 20
+install_nodejs() {
+    log_info "Installing Node.js ${NODE_VERSION}..."
+
+    # Add NodeSource repository
+    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash -
+    sudo apt-get install -y nodejs
+
+    # Verify installation
+    node_version=$(node --version)
+    npm_version=$(npm --version)
+    log_success "Node.js ${node_version} and npm ${npm_version} installed"
+
+    # Install yarn globally
+    sudo npm install -g yarn
+    log_success "Yarn installed"
+}
+
+# Install MariaDB
+install_mariadb() {
+    log_info "Installing MariaDB ${MARIADB_VERSION}..."
+
+    # Add MariaDB repository
+    sudo apt-get install -y curl
+    curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc | sudo gpg --dearmor -o /usr/share/keyrings/mariadb-keyring.gpg
+
+    echo "deb [signed-by=/usr/share/keyrings/mariadb-keyring.gpg] https://mirror.rackspace.com/mariadb/repo/${MARIADB_VERSION}/ubuntu $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/mariadb.list
+
+    sudo apt-get update -y
+    sudo apt-get install -y mariadb-server mariadb-client
+
+    # Secure MariaDB installation
+    log_info "Securing MariaDB installation..."
+    sudo mysql_secure_installation <<EOF
+
+y
+y
+y
+y
 EOF
-else
-    sudo mysql -u root <<EOF
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${MARIADB_PASS}';
-DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-FLUSH PRIVILEGES;
-EOF
-fi
 
-# Configure MariaDB for Frappe
-log "Configuring MariaDB for Frappe..."
-sudo tee /etc/mysql/mariadb.conf.d/frappe.cnf > /dev/null <<EOF
+    # Configure MariaDB for Frappe
+    log_info "Configuring MariaDB for Frappe..."
+    sudo tee /etc/mysql/mariadb.conf.d/99-frappe.cnf > /dev/null <<EOF
 [mysqld]
 character-set-client-handshake = FALSE
 character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
-
-[mysql]
-default-character-set = utf8mb4
+innodb-file-format = barracuda
+innodb-file-per-table = 1
+innodb-large-prefix = 1
+innodb-buffer-pool-size = 1G
+innodb-log-file-size = 256M
+max-allowed-packet = 256M
+sql-mode = STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
 EOF
 
-sudo systemctl restart mariadb
+    sudo systemctl restart mariadb
+    sudo systemctl enable mariadb
 
-# Start and enable Redis
-log "Starting Redis server..."
-sudo systemctl start redis-server
-sudo systemctl enable redis-server
+    log_success "MariaDB ${MARIADB_VERSION} installed and configured"
+}
 
-# Create frappe user if not exists
-log "Creating frappe user..."
-if id "frappe" &>/dev/null; then
-    info "User 'frappe' already exists. Skipping user creation."
-else
-    sudo adduser --disabled-password --gecos "" frappe
-fi
-sudo usermod -aG sudo frappe
+# Install Redis
+install_redis() {
+    log_info "Installing Redis ${REDIS_VERSION}..."
 
-# Install bench
-log "Installing bench..."
-sudo -H PIP_BREAK_SYSTEM_PACKAGES=1 pip3 install frappe-bench --break-system-packages
+    # Add Redis repository
+    curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
 
-# Switch to frappe user and setup bench
-log "Setting up bench as frappe user..."
-sudo -u frappe bash <<'EOF'
-export PIP_BREAK_SYSTEM_PACKAGES=1
-cd /home/frappe
+    sudo apt-get update -y
+    sudo apt-get install -y redis
 
-# Initialize bench with Python 3.14 (satisfies Python >= 3.14 requirement)
-bench init --frappe-branch version-16 --python python3.14 frappe-bench
-cd frappe-bench
+    # Configure Redis for Frappe
+    log_info "Configuring Redis for Frappe..."
+    sudo sed -i 's/^supervised no/supervised systemd/' /etc/redis/redis.conf
+    sudo sed -i 's/^# maxmemory <bytes>/maxmemory 256mb/' /etc/redis/redis.conf
+    sudo sed -i 's/^# maxmemory-policy noeviction/maxmemory-policy allkeys-lru/' /etc/redis/redis.conf
+
+    sudo systemctl restart redis-server
+    sudo systemctl enable redis-server
+
+    log_success "Redis ${REDIS_VERSION} installed and configured"
+}
+
+# Install Nginx
+install_nginx() {
+    log_info "Installing Nginx..."
+    sudo apt-get install -y nginx
+
+    sudo systemctl start nginx
+    sudo systemctl enable nginx
+
+    log_success "Nginx installed"
+}
+
+# Create Frappe user
+create_frappe_user() {
+    log_info "Creating Frappe user: ${FRAPPE_USER}..."
+
+    if id "${FRAPPE_USER}" &>/dev/null; then
+        log_warning "User ${FRAPPE_USER} already exists"
+    else
+        sudo adduser --disabled-password --gecos "" "${FRAPPE_USER}"
+        sudo usermod -aG sudo "${FRAPPE_USER}"
+        log_success "User ${FRAPPE_USER} created"
+    fi
+
+    # Add current user to frappe group for easier access
+    sudo usermod -aG "${FRAPPE_USER}" "$USER"
+}
+
+# Install wkhtmltopdf
+install_wkhtmltopdf() {
+    log_info "Installing wkhtmltopdf..."
+
+    cd /tmp
+    WKHTML_VERSION="0.12.6.1-3"
+    WKHTML_FILE="wkhtmltox_${WKHTML_VERSION}_$(lsb_release -cs)_amd64.deb"
+
+    wget -q "https://github.com/wkhtmltopdf/packaging/releases/download/${WKHTML_VERSION}/${WKHTML_FILE}"
+    sudo apt-get install -y ./"${WKHTML_FILE}"
+    rm -f "${WKHTML_FILE}"
+
+    log_success "wkhtmltopdf installed"
+}
+
+# Install bench CLI
+install_bench() {
+    log_info "Installing bench CLI..."
+
+    # Install bench as the frappe user
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_HOME}
+        pip3 install --user --break-system-packages frappe-bench
+        echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc
+        source ~/.bashrc
+    "
+
+    log_success "Bench CLI installed"
+}
+
+# Initialize Frappe Bench
+init_frappe_bench() {
+    log_info "Initializing Frappe Bench (version ${FRAPPE_VERSION})..."
+
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_HOME}
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
+        bench init frappe-bench --frappe-branch ${FRAPPE_VERSION} --python /usr/bin/python3
+    "
+
+    log_success "Frappe Bench initialized"
+}
+
+# Configure bench for production
+configure_bench() {
+    log_info "Configuring bench for production..."
+
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_BENCH_DIR}
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
+
+        # Set config
+        bench set-config -g db_host localhost
+        bench set-config -g redis_cache redis://localhost:6379
+        bench set-config -g redis_queue redis://localhost:6379
+        bench set-config -g redis_socketio redis://localhost:6379
+        bench set-config -g auto_update off
+        bench set-config -g maintenance_mode off
+        bench set-config -g shallow_clone on
+    "
+
+    log_success "Bench configured"
+}
 
 # Create a new site
-bench new-site frappe.localhost --admin-password admin --mariadb-root-password frappe
+create_site() {
+    local site_name="${1:-site1.local}"
+    local admin_password="${2:-admin}"
+    local mariadb_root_password="${3:-}"
 
-# Set developer mode
-bench --site frappe.localhost set-config developer_mode 1
-# Enable scheduler
-bench --site frappe.localhost enable-scheduler
+    log_info "Creating new site: ${site_name}..."
 
-EOF
+    if [[ -z "$mariadb_root_password" ]]; then
+        log_warning "MariaDB root password not provided. You'll need to enter it manually."
+        read -s -p "Enter MariaDB root password: " mariadb_root_password
+        echo
+    fi
+
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_BENCH_DIR}
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
+        bench new-site ${site_name} --admin-password '${admin_password}' --mariadb-root-password '${mariadb_root_password}' --no-mariadb-socket
+    "
+
+    # Set as default site
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_BENCH_DIR}
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
+        bench use ${site_name}
+    "
+
+    log_success "Site ${site_name} created and set as default"
+}
 
 # Setup production configuration
-log "Setting up production configuration..."
-cd /home/frappe/frappe-bench
-sudo bench setup production frappe --yes
+setup_production() {
+    log_info "Setting up production configuration..."
 
-# Configure Nginx (basic configuration)
-log "Configuring Nginx..."
-sudo tee /etc/nginx/sites-available/frappe.localhost > /dev/null <<EOF
-server {
-    listen 8080;
-    server_name frappe.localhost;
-    
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
+    # Setup nginx config
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_BENCH_DIR}
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
+        bench setup nginx
+    "
+
+    # Copy nginx config
+    sudo cp "${FRAPPE_BENCH_DIR}/config/nginx.conf" /etc/nginx/sites-available/frappe
+    sudo ln -sf /etc/nginx/sites-available/frappe /etc/nginx/sites-enabled/frappe
+    sudo rm -f /etc/nginx/sites-enabled/default
+
+    # Test nginx config
+    sudo nginx -t
+    sudo systemctl reload nginx
+
+    # Setup supervisor
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_BENCH_DIR}
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
+        bench setup supervisor
+    "
+
+    sudo cp "${FRAPPE_BENCH_DIR}/config/supervisor.conf" /etc/supervisor/conf.d/frappe.conf
+    sudo supervisorctl reread
+    sudo supervisorctl update
+    sudo supervisorctl restart all
+
+    # Setup systemd services for bench
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_BENCH_DIR}
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
+        bench setup systemd
+    "
+
+    sudo cp /home/${FRAPPE_USER}/frappe-bench/config/systemd/* /etc/systemd/system/
+    sudo systemctl daemon-reload
+
+    # Enable and start services
+    sudo systemctl enable frappe-bench-webserver frappe-bench-workers frappe-bench-schedule
+    sudo systemctl start frappe-bench-webserver frappe-bench-workers frappe-bench-schedule
+
+    log_success "Production configuration completed"
 }
+
+# Install ERPNext (optional)
+install_erpnext() {
+    log_info "Installing ERPNext..."
+
+    sudo -H -u "${FRAPPE_USER}" bash -c "
+        cd ${FRAPPE_BENCH_DIR}
+        export PATH=\"\$HOME/.local/bin:\$PATH\"
+        bench get-app --branch version-16 erpnext https://github.com/frappe/erpnext
+        bench --site all install-app erpnext
+    "
+
+    log_success "ERPNext installed"
+}
+
+# Setup firewall
+setup_firewall() {
+    log_info "Configuring firewall..."
+
+    sudo ufw allow OpenSSH
+    sudo ufw allow 'Nginx Full'
+    sudo ufw --force enable
+
+    log_success "Firewall configured"
+}
+
+# Print summary
+print_summary() {
+    local site_name="${1:-site1.local}"
+
+    echo
+    echo "============================================================================="
+    echo -e "${GREEN}✓ Frappe Framework v16 Installation Complete!${NC}"
+    echo "============================================================================="
+    echo
+    echo -e "${BLUE}Installation Details:${NC}"
+    echo "  Frappe User:      ${FRAPPE_USER}"
+    echo "  Bench Directory:  ${FRAPPE_BENCH_DIR}"
+    echo "  Site Name:        ${site_name}"
+    echo "  Python Version:   $(python3 --version)"
+    echo "  Node Version:     $(node --version)"
+    echo "  MariaDB Version:  $(mysql --version | awk '{print $5}' | sed 's/,//')"
+    echo "  Redis Version:    $(redis-server --version | awk '{print $3}' | sed 's/v=//')"
+    echo
+    echo -e "${BLUE}Access URLs:${NC}"
+    echo "  Site:             http://$(hostname -I | awk '{print $1}')"
+    echo "  Admin Login:      http://$(hostname -I | awk '{print $1}')/login"
+    echo
+    echo -e "${BLUE}Default Credentials:${NC}"
+    echo "  Username:         Administrator"
+    echo "  Password:         admin (change this immediately!)"
+    echo
+    echo -e "${BLUE}Useful Commands:${NC}"
+    echo "  Switch to frappe user:  sudo su - ${FRAPPE_USER}"
+    echo "  Start bench:            cd ${FRAPPE_BENCH_DIR} && bench start"
+    echo "  Run migrations:         bench --site ${site_name} migrate"
+    echo "  Backup site:            bench --site ${site_name} backup"
+    echo "  Install app:            bench get-app <app_name> && bench --site ${site_name} install-app <app_name>"
+    echo
+    echo -e "${YELLOW}Important:${NC}"
+    echo "  1. Change the default admin password immediately!"
+    echo "  2. Configure SSL/TLS for production use"
+    echo "  3. Set up regular backups"
+    echo "  4. Review /etc/nginx/sites-available/frappe for custom domains"
+    echo
+    echo "============================================================================="
+}
+
+# Main installation flow
+main() {
+    local site_name="${1:-site1.local}"
+    local admin_password="${2:-admin}"
+    local mariadb_root_password="${3:-}"
+    local install_erpnext_flag="${4:-false}"
+
+    echo "============================================================================="
+    echo -e "${BLUE}Frappe Framework v16 Installation Script${NC}"
+    echo "============================================================================="
+    echo
+
+    check_root
+    check_ubuntu
+    check_sudo
+
+    log_info "Starting Frappe v16 installation..."
+    echo
+
+    update_system
+    install_essentials
+    install_python
+    install_nodejs
+    install_mariadb
+    install_redis
+    install_nginx
+    create_frappe_user
+    install_wkhtmltopdf
+    install_bench
+    init_frappe_bench
+    configure_bench
+    create_site "$site_name" "$admin_password" "$mariadb_root_password"
+    setup_production
+    setup_firewall
+
+    if [[ "$install_erpnext_flag" == "true" ]]; then
+        install_erpnext
+    fi
+
+    print_summary "$site_name"
+}
+
+# Help function
+show_help() {
+    cat <<EOF
+Frappe Framework v16 Installation Script for Ubuntu
+
+Usage: $0 [OPTIONS] [SITE_NAME] [ADMIN_PASSWORD] [MARIADB_ROOT_PASSWORD] [INSTALL_ERPNEXT]
+
+Arguments:
+  SITE_NAME              Site name (default: site1.local)
+  ADMIN_PASSWORD         Admin password (default: admin)
+  MARIADB_ROOT_PASSWORD  MariaDB root password (will prompt if not provided)
+  INSTALL_ERPNEXT        Install ERPNext (true/false, default: false)
+
+Options:
+  -h, --help             Show this help message
+  --site-name            Site name
+  --admin-password       Admin password
+  --mariadb-password     MariaDB root password
+  --with-erpnext         Install ERPNext
+
+Examples:
+  $0                                                                    # Interactive with defaults
+  $0 mysite.local mypassword dbpassword                                 # Quick install
+  $0 --site-name mysite.local --admin-password mypass --with-erpnext    # With ERPNext
+  $0 --help                                                             # Show help
+
 EOF
+}
 
-sudo ln -sf /etc/nginx/sites-available/frappe.localhost /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
+# Parse arguments
+SITE_NAME="site1.local"
+ADMIN_PASSWORD="admin"
+MARIADB_ROOT_PASSWORD=""
+INSTALL_ERPNEXT="false"
 
-# Add frappe.localhost to hosts file
-log "Adding frappe.localhost to hosts file..."
-echo "127.0.0.1 frappe.localhost" | sudo tee -a /etc/hosts
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --site-name)
+            SITE_NAME="$2"
+            shift 2
+            ;;
+        --admin-password)
+            ADMIN_PASSWORD="$2"
+            shift 2
+            ;;
+        --mariadb-password)
+            MARIADB_ROOT_PASSWORD="$2"
+            shift 2
+            ;;
+        --with-erpnext)
+            INSTALL_ERPNEXT="true"
+            shift
+            ;;
+        *)
+            # Positional arguments
+            if [[ -z "${POSITIONAL_ARGS[0]}" ]]; then
+                SITE_NAME="$1"
+            elif [[ -z "${POSITIONAL_ARGS[1]}" ]]; then
+                ADMIN_PASSWORD="$1"
+            elif [[ -z "${POSITIONAL_ARGS[2]}" ]]; then
+                MARIADB_ROOT_PASSWORD="$1"
+            elif [[ -z "${POSITIONAL_ARGS[3]}" ]]; then
+                INSTALL_ERPNEXT="$1"
+            fi
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
 
-# Create systemd service for bench
-log "Creating systemd service for bench..."
-sudo tee /etc/systemd/system/frappe.service > /dev/null <<EOF
-[Unit]
-Description=Frappe web server
-After=network.target
-
-
-[Service]
-Type=simple
-User=frappe
-WorkingDirectory=/home/frappe/frappe-bench
-ExecStart=/usr/local/bin/bench start
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable frappe
-
-# Set proper permissions
-log "Setting proper permissions..."
-sudo chown -R frappe:frappe /home/frappe/frappe-bench
-
-# Save passwords to file
-log "Saving passwords to file..."
-sudo tee /home/frappe/frappe_passwords.txt > /dev/null <<EOF
-Frappe Installation Passwords:
-=============================
-MariaDB Root Password: frappe
-Frappe Administrator Password: admin
-Site: frappe.localhost
-
-Access URLs:
-============
-Local: http://frappe.localhost:8080
-Development: http://127.0.0.1:8080
-
-Commands to start development server:
-====================================
-sudo -u frappe bash
-cd /home/frappe/frappe-bench
-bench start
-
-Production setup (optional):
-============================
-sudo bench setup production frappe
-EOF
-
-sudo chown frappe:frappe /home/frappe/frappe_passwords.txt
-
-log "Installation completed successfully!"
-info "Passwords saved to: /home/frappe/frappe_passwords.txt"
-info "To start development server:"
-info "  sudo -u frappe bash"
-info "  cd /home/frappe/frappe-bench"
-info "  bench start"
-info ""
-info "Access your site at: http://frappe.localhost:8080"
-info "Default login: Administrator / admin"
-info ""
-warning "Remember to change default passwords in production!"
-# Configure fail2ban
-log "Configuring fail2ban..."
-sudo systemctl start fail2ban
-sudo systemctl enable fail2ban
-
-# Final system checks
-log "Performing final system checks..."
-sudo systemctl status mariadb --no-pager
-sudo systemctl status redis-server --no-pager
-sudo systemctl status nginx --no-pager
-
-# Start frappe service
-log "Starting Frappe service..."
-sudo systemctl start frappe
-
-log "Installation completed successfully!"
-info "Passwords saved to: /home/frappe/frappe_passwords.txt"
-info ""
-info "=== IMPORTANT NEXT STEPS ==="
-info "1. Access your site at: http://frappe.localhost:8080"
-info "2. Default login: Administrator / admin"
-info "3. Change default passwords immediately!"
-info ""
-info "=== DEVELOPMENT MODE ==="
-info "To start development server manually:"
-info "  sudo -u frappe bash"
-info "  cd /home/frappe/frappe-bench"
-info "  bench start"
-info ""
-info "=== PRODUCTION MODE ==="
-info "Production setup is already configured and running"
-info "Services: nginx, supervisor, mariadb, redis"
-info ""
-warning "Remember to:"
-warning "- Change default passwords"
-warning "- Configure firewall rules"
-warning "- Set up SSL certificates for production"
-warning "- Regular backups"
+# Run main installation
+main "$SITE_NAME" "$ADMIN_PASSWORD" "$MARIADB_ROOT_PASSWORD" "$INSTALL_ERPNEXT"
