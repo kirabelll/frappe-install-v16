@@ -152,11 +152,10 @@ install_nodejs() {
 install_mariadb() {
     log_info "Installing MariaDB ${MARIADB_VERSION}..."
 
-    # Add MariaDB repository
-    sudo apt-get install -y curl
-    curl -fsSL https://mariadb.org/mariadb_release_signing_key.asc | sudo gpg --dearmor -o /usr/share/keyrings/mariadb-keyring.gpg
-
-    echo "deb [signed-by=/usr/share/keyrings/mariadb-keyring.gpg] https://mirror.rackspace.com/mariadb/repo/${MARIADB_VERSION}/ubuntu $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/mariadb.list
+    # Configure MariaDB's official repository. Avoid pinning a single mirror,
+    # since individual mirrors can be unreachable from some networks.
+    curl -fsSL https://r.mariadb.com/downloads/mariadb_repo_setup | \
+        sudo bash -s -- --mariadb-server-version="mariadb-${MARIADB_VERSION}"
 
     sudo apt-get update -y
     sudo apt-get install -y mariadb-server mariadb-client
